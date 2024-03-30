@@ -8,7 +8,7 @@ WORKDIR /usr/src/app
 COPY . .
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir datadog-api-client requests schedule ddtrace
+RUN pip install --no-cache-dir datadog-api-client requests schedule
 
 # Run fetch_wait_times.py when the container launches
-CMD ["ddtrace-run", "python", "./fetch_wait_times.py"]
+CMD ["python", "./fetch_wait_times.py"]
