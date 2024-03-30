@@ -51,13 +51,36 @@ def fetch_and_submit(park_name, metric_type):
     
     url = urls.get(park_name, None)
     if url:
+        logger.info({
+            'message': f"Attempting to fetch data for {park_name} ({metric_type})",
+            'park_name': park_name,
+            'metric_type': metric_type,
+            'action': 'fetch_attempt'
+        })
+        
         response = requests.get(url)
+        
         if response.status_code == 200:
+            logger.info({
+                'message': f"Successfully fetched data for {park_name} ({metric_type})",
+                'park_name': park_name,
+                'metric_type': metric_type,
+                'action': 'fetch_success',
+                'response_status': response.status_code
+            })
             attractions = response.json()
             if metric_type == 'wait_times':
                 submit_wait_times_to_datadog(attractions, park_name)
             elif metric_type == 'status':
                 submit_status_to_datadog(attractions, park_name)
+        else:
+            logger.error({
+                'message': f"Failed to fetch data for {park_name} ({metric_type})",
+                'park_name': park_name,
+                'metric_type': metric_type,
+                'action': 'fetch_failure',
+                'response_status': response.status_code
+            })
 
 def submit_wait_times_to_datadog(attractions, park_name):
     submit_to_datadog(attractions, park_name, metric_type='wait_times')
