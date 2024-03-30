@@ -1,3 +1,4 @@
 requests
 datadog-api-client
 schedule
+python-json-logger
