@@ -1,7 +1,7 @@
 import requests
 import schedule
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from urllib.parse import urlparse
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.metrics_api import MetricsApi
@@ -68,8 +68,8 @@ def submit_status_to_datadog(attractions, park_name):
 def submit_to_datadog(attractions, park_name, metric_type):
     series = []
     for attraction in attractions:
-        # Assuming each attraction has a unique identifier
-        attraction_id = attraction.get('id', attraction['name'])
+        attraction_id = attraction.get('id', attraction['name'])  # Unique identifier for each attraction
+        attraction_type = attraction['meta']['type'] if 'meta' in attraction and 'type' in attraction['meta'] else 'unknown'
         if metric_type == 'wait_times' and attraction['waitTime'] is not None:
             metric_name = "attraction.wait_time"
             value = attraction['waitTime']
@@ -79,29 +79,36 @@ def submit_to_datadog(attractions, park_name, metric_type):
             
             # Additional logic for logging status changes
             current_status = attraction['status']
-            previous_status = ride_previous_status.get(attraction_id, {}).get('status')
-            last_change = ride_previous_status.get(attraction_id, {}).get('last_change', datetime.now())
+            previous_info = ride_previous_status.get(attraction_id, {})
+            previous_status = previous_info.get('status')
+            last_change = previous_info.get('last_change', datetime.now())
             
             if current_status != previous_status:
                 duration_since_last_change = datetime.now() - last_change
                 logger.info({
                     'ride_id': attraction_id,
                     'park_name': park_name,
+                    'attraction_name': attraction['name'],
                     'previous_status': previous_status,
                     'current_status': current_status,
+                    'attraction_type': attraction_type,
                     'duration_since_last_change_seconds': duration_since_last_change.total_seconds(),
-                    'message': f"Status changed for {attraction['name']} in {park_name}"
+                    'message': f"Status changed for {attraction['name']} ({attraction_type}) in {park_name}: {previous_status} -> {current_status}"
                 })
                 
-                # Update the ride status and last change time
-                ride_previous_status[attraction_id] = {'status': current_status, 'last_change': datetime.now()}
+                # Update the last change time and status
+                ride_previous_status[attraction_id] = {
+                    'status': current_status, 
+                    'last_change': datetime.now(),
+                    'type': attraction_type
+                }
         else:
             continue
 
         tags = [
             f"name:{attraction['name']}",
             f"status:{attraction['status']}",
-            f"type:{attraction['meta']['type']}",
+            f"type:{attraction_type}",
             f"active:{'yes' if attraction['active'] else 'no'}",
             f"park:{park_name}"
         ]
@@ -115,7 +122,7 @@ def submit_to_datadog(attractions, park_name, metric_type):
             )],
             tags=tags
         ))
-    
+
     if series:
         body = MetricPayload(series=series)
         configuration = Configuration()
