@@ -1,7 +1,7 @@
 import requests
 import schedule
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.metrics_api import MetricsApi
@@ -9,6 +9,37 @@ from datadog_api_client.v2.model.metric_intake_type import MetricIntakeType
 from datadog_api_client.v2.model.metric_payload import MetricPayload
 from datadog_api_client.v2.model.metric_point import MetricPoint
 from datadog_api_client.v2.model.metric_series import MetricSeries
+import logging
+from logging.config import dictConfig
+from pythonjsonlogger import jsonlogger
+
+# Setup JSON logging
+dictConfig({
+    'version': 1,
+    'formatters': {
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'fmt': '%(asctime)s %(levelname)s %(message)s'
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        }
+    },
+    'loggers': {
+        'RideLogger': {
+            'handlers': ['console'],
+            'level': logging.INFO,
+        }
+    }
+})
+
+logger = logging.getLogger('RideLogger')
+
+# Keep track of the last status to identify changes
+ride_previous_status = {}
 
 def fetch_and_submit(park_name, metric_type):
     urls = {
@@ -37,12 +68,33 @@ def submit_status_to_datadog(attractions, park_name):
 def submit_to_datadog(attractions, park_name, metric_type):
     series = []
     for attraction in attractions:
+        # Assuming each attraction has a unique identifier
+        attraction_id = attraction.get('id', attraction['name'])
         if metric_type == 'wait_times' and attraction['waitTime'] is not None:
             metric_name = "attraction.wait_time"
             value = attraction['waitTime']
         elif metric_type == 'status':
             metric_name = "attraction.status"
             value = 1 if attraction['status'] == "Operating" else 0
+            
+            # Additional logic for logging status changes
+            current_status = attraction['status']
+            previous_status = ride_previous_status.get(attraction_id, {}).get('status')
+            last_change = ride_previous_status.get(attraction_id, {}).get('last_change', datetime.now())
+            
+            if current_status != previous_status:
+                duration_since_last_change = datetime.now() - last_change
+                logger.info({
+                    'ride_id': attraction_id,
+                    'park_name': park_name,
+                    'previous_status': previous_status,
+                    'current_status': current_status,
+                    'duration_since_last_change_seconds': duration_since_last_change.total_seconds(),
+                    'message': f"Status changed for {attraction['name']} in {park_name}"
+                })
+                
+                # Update the ride status and last change time
+                ride_previous_status[attraction_id] = {'status': current_status, 'last_change': datetime.now()}
         else:
             continue
 
