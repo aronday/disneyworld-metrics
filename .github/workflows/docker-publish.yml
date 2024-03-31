@@ -49,3 +49,6 @@ jobs:
         push: true
         tags: ${{ env.TAGS }}
         platforms: linux/amd64,linux/arm64,linux/arm/v7
+        build-args: |
+          DD_GIT_REPOSITORY_URL=https://github.com/aronday/disneyworld-metrics
+          DD_GIT_COMMIT_SHA=${{ github.sha }}
