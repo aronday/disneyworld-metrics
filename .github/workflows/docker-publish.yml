@@ -27,17 +27,21 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    - name: Extract version from Git tag
-      if: startsWith(github.ref, 'refs/tags/')
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
-    - name: Determine tags for Docker image
+    - name: Prepare tags
       run: |
-        if [ "${{ github.ref }}" != "" ]; then
-          echo "TAGS=dayaron/disneyworld-metrics-datadog:${{ env.VERSION }},dayaron/disneyworld-metrics-datadog:latest" >> $GITHUB_ENV
+        if [[ ${{ github.ref }} == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          TAGS="dayaron/disneyworld-metrics-datadog:$VERSION,dayaron/disneyworld-metrics-datadog:latest"
+        elif [[ ${{ github.ref }} == refs/heads/develop ]]; then
+          TAGS="dayaron/disneyworld-metrics-datadog:develop"
         else
-          echo "TAGS=dayaron/disneyworld-metrics-datadog:develop" >> $GITHUB_ENV
+          # This branch should not be reached due to the workflow's 'on' conditions, but it's here as a safeguard.
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          TAGS="dayaron/disneyworld-metrics-datadog:unexpected-$TIMESTAMP"
+          echo "Unexpected ref ${GITHUB_REF}, using timestamp for tag."
         fi
+        echo "TAGS=$TAGS" >> $GITHUB_ENV
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
